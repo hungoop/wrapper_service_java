@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin Tool NettServer</title>
+</head>
+<body>
+<script type="text/javascript">
+"use strict";
+
+//Object.defineProperty(exports, "__esModule", {
+//  value: true
+//});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+/**
+* Created by loc on 6/8/2017.
+*/
+var CONTROLLER_KEY = "cid";
+var REQUEST_KEY = "rid";
+var MESSAGE_KEY = "mes";
+var COMMAND_KEY = "c";
+var EXTDATA_KEY = "p";
+var ERROR_CODE_KEY = "ec";
+var ERROR_CONTENT_KEY = "ep";
+
+var CID_SYSTEM = 0;
+var CID_EXTEND = 1;
+
+var RID = {
+  LOGIN: 1,
+  LOGOUT: 2,
+  JOINT_ROOM: 4,
+  CREATE_ROOM: 6,
+  EXTENSION: 13,
+  LEAVE_ROOM: 14,
+  ON_USER_ENTER_ROOM: 41,
+  ON_USER_LOST: 43,
+  ON_ROOM_LOST: 44,
+  ON_USER_LEAVE_ROOM: 45
+};
+
+var WebsocketServer = function () {
+  function WebsocketServer() {
+      _classCallCheck(this, WebsocketServer);
+
+      this.connectTimeOut = 3000;
+      this.forcedClose = false;
+  }
+
+  /*public interface*/
+  /*
+  * @param: data = {serverPath, serverPort}
+  * */
+
+
+  _createClass(WebsocketServer, [{
+      key: "connect",
+      value: function connect(path, port) {
+          var _this = this;
+
+          var param = arguments.length <= 2 || arguments[2] === undefined ? "" : arguments[2];
+
+          var url = 'ws://' + path + ':' + port + '/' + param;
+          this.ws = new WebSocket(url);
+
+          this.ws.onopen = function (e) {
+              _this.onSocketOpen(e);
+          };
+          this.ws.onclose = function (e) {
+              _this.ws = null;
+              _this.onSocketClose(e);
+          };
+          this.ws.onmessage = function (e) {
+              _this.onSocketMessage(e);
+          };
+          this.ws.onerror = function (e) {
+              _this.onSocketError(e);
+          };
+      }
+  }, {
+      key: "disconnect",
+      value: function disconnect() {
+          if (this.ws && this.ws.readyState == WebSocket.OPEN) {
+              this.ws.close();
+              return true;
+          }
+          return false;
+      }
+  }, {
+      key: "login",
+      value: function login(uname, upass, zone, param) {
+          if (this.ws && this.ws.readyState == WebSocket.OPEN) {
+              var mes = {};
+              mes["un"] = uname;
+              mes["pw"] = upass;
+              mes["zn"] = zone;
+              mes["ld"] = param;
+              this.send(RID.LOGIN, mes);
+          }
+      }
+  }, {
+      key: "logout",
+      value: function logout() {
+          this.send(RID.LOGOUT, {});
+      }
+  }, {
+      key: "joinRoom",
+      value: function joinRoom(data) {
+          this.send(RID.JOINT_ROOM, data);
+      }
+  }, {
+      key: "createRoom",
+      value: function createRoom(data) {
+          this.send(RID.CREATE_ROOM, data);
+      }
+  }, {
+      key: "sendExtension",
+      value: function sendExtension(command, data) {
+          this.send(RID.EXTENSION, data, command);
+      }
+  }, {
+      key: "send",
+      value: function send(rid, mes) {
+          var cmd = arguments.length <= 2 || arguments[2] === undefined ? "" : arguments[2];
+
+          var isExt = rid == RID.EXTENSION;
+          var mesExt = {};
+          if (isExt) {
+              mesExt[COMMAND_KEY] = cmd;
+              mesExt[EXTDATA_KEY] = mes;
+          } else {
+              mesExt = mes;
+          }
+          var req = new JSObject(isExt ? CID_EXTEND : CID_SYSTEM, rid, mesExt);
+          if (this.ws && this.ws.readyState == WebSocket.OPEN) {
+              console.log('requestSystem', req.toJson());
+              return this.ws.send(req.toJson());
+          } else {
+              throw 'INVALID_STATE_ERR : Pausing to reconnect websocket';
+          }
+      }
+
+      //////////////////////////////
+      //  CONNECTION STATUS
+      //////////////////////////////
+
+  }, {
+      key: "onSocketOpen",
+      value: function onSocketOpen(e) {
+          this.onConnection();
+      }
+  }, {
+      key: "onSocketClose",
+      value: function onSocketClose(e) {
+          this.onConnectionLost();
+          console.log('onSocketClose: ', e.reason);
+      }
+  }, {
+      key: "onSocketError",
+      value: function onSocketError(e) {
+          this.onConnectionError(e);
+          console.log('onSocketError: ', e);
+      }
+  }, {
+      key: "onSocketMessage",
+      value: function onSocketMessage(e) {
+          console.log('onSocketMessage: ', e.data);
+          var data = e.data;
+          var obj = JSON.parse(data);
+          var controllerId = Number(obj[CONTROLLER_KEY]);
+          var requestId = Number(obj[REQUEST_KEY]);
+          var content = obj[MESSAGE_KEY];
+          if (controllerId == CID_SYSTEM) {
+              this.internalMessageHandler(requestId, content);
+          } else if (controllerId == CID_EXTEND) {
+              var cmd = content[COMMAND_KEY];
+              var jObject = content[EXTDATA_KEY];
+              this.extensionMessageHandler(cmd, jObject);
+          } else {
+              console.log("CONTROLLER NOT SUPPORT.");
+          }
+      }
+      /////////////////////////////////////
+      //  SERVER RESPONSE
+      /////////////////////////////////////
+
+  }, {
+      key: "internalMessageHandler",
+      value: function internalMessageHandler(rId, data) {
+          console.log("internalMessageHandler: ", rId, data);
+          switch (rId) {
+              case RID.LOGIN:
+                  if (data[ERROR_CONTENT_KEY] != undefined) {
+                      this.onLoginError(data[ERROR_CONTENT_KEY]);
+                  } else {
+                      this.onLogin(data);
+                  }
+          }
+      }
+  }, {
+      key: "extensionMessageHandler",
+      value: function extensionMessageHandler(command, data) {
+          this.onExtensionResponse(command, data);
+      }
+  }]);
+
+  return WebsocketServer;
+}();
+
+//exports.default = WebsocketServer;
+
+WebsocketServer.prototype.onConnection = null;
+WebsocketServer.prototype.onConnectionLost = null;
+WebsocketServer.prototype.onConnectionError = null;
+WebsocketServer.prototype.onLogin = null;
+WebsocketServer.prototype.onLoginError = null;
+WebsocketServer.prototype.onExtensionResponse = null;
+
+var JSObject = function () {
+  function JSObject(cid, rid, data) {
+      _classCallCheck(this, JSObject);
+
+      this[CONTROLLER_KEY] = cid;
+      this[REQUEST_KEY] = rid;
+      this[MESSAGE_KEY] = data;
+  }
+
+  _createClass(JSObject, [{
+      key: "toJson",
+      value: function toJson() {
+          var obj = {};
+          obj[CONTROLLER_KEY] = this[CONTROLLER_KEY];
+          obj[REQUEST_KEY] = this[REQUEST_KEY];
+          obj[MESSAGE_KEY] = this[MESSAGE_KEY];
+          return JSON.stringify(obj);
+      }
+  }, {
+      key: "toString",
+      value: function toString() {
+          var rs = "";
+          rs += " controllerId: " + this.cid.toString() + "\r\n";
+          rs += " requestId: " + this.rid.toString() + "\r\n";
+          rs += " content: " + this.data.toString();
+          return rs;
+      }
+  }]);
+
+  return JSObject;
+}();
+</script>
+
+<script type="text/javascript">
+
+var ws = new WebsocketServer();
+function connect() {
+	ws.connect("$$$host$$$", "$$$port$$$");
+	
+	ws.onConnection = function onConnection() {
+		console.log("Seteven onConnection!!!");
+		var user = document.getElementById("an").value;
+		var pass = document.getElementById("ap").value;
+		ws.login(user, pass, "$$$zone$$$", {});
+	}
+	
+	//return false;
+}
+
+ws.onConnectionLost = function onConnectionLost() {
+	console.log("Seteven onConnectionLost!!!");
+	document.getElementById("notify").innerHTML = "onConnectionLost!" ;
+}
+ws.onConnectionError = function onConnectionError() {
+	console.log("Seteven onConnectionError!!!");
+	document.getElementById("notify").innerHTML = "onConnectionError!" ;
+}
+ws.onExtensionResponse = function onExtensionResponse(command, data) {
+	console.log("Seteven onExtensionResponse!!!");
+	
+	var para = document.createElement(command);
+	para.innerHTML = data.data;
+	
+	var element = document.getElementById("container");
+	element.appendChild(para);
+}
+ws.onLogin = function onLogin(data) {
+	console.log("Seteven onLogin!!!");
+	document.cookie = "$$$cookie$$$=" + JSON.stringify(data);
+	
+	document.getElementById("notify").innerHTML = "Login OK. " + JSON.stringify(data);
+	
+	var elem = document.getElementById('frmLogin');
+    elem.parentNode.removeChild(elem);
+}
+ws.onLoginError = function onLoginError(e) {
+	console.log("Seteven onLoginError!!!");
+	document.getElementById("notify").innerHTML = "Login Error: " + e;
+}
+</script>
+	<div id="frmLogin">
+		<div id="note">ADMIN LOGIN TO GAME SERVER</div>
+		<form action="javascript:connect()" autocomplete="on">
+		  Admin Name: <input type="text" id="an"><br>
+		  Admin Pass: <input type="password" id="ap"><br>
+		  <input type="submit" value="LOGIN ADMIN ROLE">
+		</form>
+	</div>
+	<div id="notify"></div>
+	<div id="container"></div>
+</body>
+</html>

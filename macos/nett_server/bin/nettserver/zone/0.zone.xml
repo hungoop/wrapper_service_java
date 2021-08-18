@@ -1,0 +1,13 @@
+<zone>
+  <name>0</name>
+  <isCustomLogin>true</isCustomLogin>
+  <isForceLogout>true</isForceLogout>
+  <maxUsers>3500</maxUsers>
+  <maxRooms>10</maxRooms>
+  <rooms>
+  </rooms>
+  <extension>
+ 	<fileName></fileName>
+	<className></className>
+  </extension>
+</zone>

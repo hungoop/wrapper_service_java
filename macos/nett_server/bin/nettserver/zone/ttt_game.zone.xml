@@ -1,0 +1,30 @@
+<zone>
+  <name>ttt_game</name>
+  <isCustomLogin>false</isCustomLogin>
+  <isForceLogout>true</isForceLogout>
+  <maxUsers>3500</maxUsers>
+  <maxRooms>1000</maxRooms>
+
+  <isNotifyCreateRoom>true</isNotifyCreateRoom>
+  <isNotifyRemoveRoom>true</isNotifyRemoveRoom>
+  <logLevel>debug</logLevel>
+  <isMedia>false</isMedia>
+  <groupName>game_main</groupName>
+  <splitKey>0,0,0,1</splitKey>
+  <rooms>
+
+    <room>
+  	  <name>game room 0</name>
+      <maxPlayers>1000</maxPlayers>
+      <maxSpectators>1000</maxSpectators>
+      <isNotifyEnterRoom>true</isNotifyEnterRoom>
+      <isNotifyExitRoom>true</isNotifyExitRoom>
+      <isNotifyUserLost>true</isNotifyUserLost>
+    </room>
+
+  </rooms>
+  <extension>
+ 	<fileName>ttt_game_extension.jar</fileName>
+	<className>ttt.nett.server.TTTExtension</className>
+  </extension>
+</zone>
